@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 logging.basicConfig(level=logging.INFO)
@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("BOT_TOKEN", "YOUR_TOKEN_HERE")
 DATA_FILE = "data.json"
 GOAL = 400000
+MINI_APP_URL = "https://felaxish.github.io/finance-bot/finance-tracker.html"
 
-# ─── КАТЕГОРИИ ───────────────────────────────────────────────
 CATS_EXPENSE = {
     "food":      "🍔 Еда",
     "transport": "🚗 Транспорт",
@@ -30,7 +30,6 @@ CATS_INCOME = {
     "other":     "📦 Прочее",
 }
 
-# ─── ХРАНИЛИЩЕ ────────────────────────────────────────────────
 def load_data(user_id: int) -> dict:
     if not os.path.exists(DATA_FILE):
         return {}
@@ -47,7 +46,6 @@ def save_data(user_id: int, data: dict):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(all_data, f, ensure_ascii=False, indent=2)
 
-# ─── ВСПОМОГАТЕЛЬНЫЕ ──────────────────────────────────────────
 def fmt(n: float) -> str:
     return f"{int(n):,}".replace(",", " ") + " ₽"
 
@@ -73,20 +71,21 @@ def totals(txs: list) -> dict:
 
 def main_keyboard():
     return ReplyKeyboardMarkup([
+        [{"text": "💳 Открыть трекер", "web_app": {"url": MINI_APP_URL}}],
         ["➕ Доход", "➖ Расход"],
         ["📊 Статистика", "📋 История"],
         ["🎯 Цель"],
     ], resize_keyboard=True)
 
-# ─── КОМАНДЫ ──────────────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.first_name
     await update.message.reply_text(
         f"Привет, {name}! 👋\n\n"
         "Я твой финансовый трекер.\n\n"
-        "Как добавить операцию:\n"
-        "• Нажми кнопку ➕ Доход или ➖ Расход\n"
-        "• Или напиши быстро: `кофе 350` или `зарплата 80000`\n\n"
+        "Нажми *💳 Открыть трекер* — там красивый интерфейс.\n\n"
+        "Или добавляй быстро текстом:\n"
+        "• `кофе 350` — расход\n"
+        "• `зарплата 80000` — доход\n\n"
         "Поехали 🚀",
         reply_markup=main_keyboard(),
         parse_mode="Markdown"
@@ -97,25 +96,23 @@ async def stats_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     data = load_data(user_id)
     txs = get_month_txs(data.get("transactions", []))
     t = totals(txs)
-    
     inc, exp, bal = t["income"], t["expense"], t["balance"]
     pct = round(inc / GOAL * 100) if GOAL > 0 else 0
     bar_filled = round(pct / 5)
     bar = "█" * bar_filled + "░" * (20 - bar_filled)
-    
-    # Расходы по категориям
+
     by_cat = {}
     for tx in txs:
         if tx["type"] == "expense":
             by_cat[tx["cat"]] = by_cat.get(tx["cat"], 0) + tx["amount"]
-    
+
     cat_lines = ""
     if by_cat:
         sorted_cats = sorted(by_cat.items(), key=lambda x: x[1], reverse=True)
         for cat_id, val in sorted_cats[:5]:
             label = CATS_EXPENSE.get(cat_id, cat_id)
             cat_lines += f"  {label}: {fmt(val)}\n"
-    
+
     text = (
         f"📊 *Статистика за {month_name(current_month())}*\n\n"
         f"💚 Доходы: *{fmt(inc)}*\n"
@@ -128,18 +125,21 @@ async def stats_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     if cat_lines:
         text += f"\n📂 *Топ расходов:*\n{cat_lines}"
-    
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("💳 Открыть трекер", web_app=WebAppInfo(url=MINI_APP_URL))
+    ]])
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
 
 async def history_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = load_data(user_id)
     txs = sorted(get_month_txs(data.get("transactions", [])), key=lambda x: x["date"], reverse=True)
-    
+
     if not txs:
         await update.message.reply_text("Пока нет операций за этот месяц.", reply_markup=main_keyboard())
         return
-    
+
     lines = []
     for tx in txs[:15]:
         cat_dict = CATS_INCOME if tx["type"] == "income" else CATS_EXPENSE
@@ -147,11 +147,11 @@ async def history_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         sign = "+" if tx["type"] == "income" else "−"
         date_str = tx["date"][8:10] + "." + tx["date"][5:7]
         lines.append(f"{date_str} {cat_label} {sign}{fmt(tx['amount'])} — {tx['desc']}")
-    
+
     text = f"📋 *История за {month_name(current_month())}*\n\n" + "\n".join(lines)
     if len(txs) > 15:
         text += f"\n\n_...и ещё {len(txs)-15} операций_"
-    
+
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def goal_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -162,29 +162,30 @@ async def goal_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     inc = t["income"]
     pct = round(inc / GOAL * 100)
     left = max(0, GOAL - inc)
-    days_left = (datetime.now().replace(day=1, month=datetime.now().month % 12 + 1) - datetime.now()).days
-    
+    now = datetime.now()
+    import calendar
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
+    days_left = days_in_month - now.day + 1
+
     text = (
         f"🎯 *Прогресс к цели*\n\n"
         f"Цель: {fmt(GOAL)}/мес\n"
         f"Получено: {fmt(inc)} ({pct}%)\n"
         f"Осталось: {fmt(left)}\n"
-        f"Дней в месяце: ~{days_left}\n\n"
+        f"Дней до конца месяца: {days_left}\n\n"
     )
     if left > 0 and days_left > 0:
         text += f"Нужно зарабатывать ~{fmt(left // days_left)}/день"
     else:
         text += "🎉 Цель достигнута!"
-    
+
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
-# ─── ДОБАВЛЕНИЕ ОПЕРАЦИЙ ──────────────────────────────────────
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     user_id = update.effective_user.id
     data = load_data(user_id)
 
-    # Кнопки меню
     if text == "📊 Статистика":
         return await stats_cmd(update, ctx)
     if text == "📋 История":
@@ -192,7 +193,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if text == "🎯 Цель":
         return await goal_cmd(update, ctx)
 
-    # Кнопки добавления
     if text == "➕ Доход":
         data["pending"] = {"type": "income"}
         save_data(user_id, data)
@@ -211,7 +211,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Быстрый ввод: "кофе 350" или "350 кофе" или "зарплата 80000"
     parts = text.split()
     amount = None
     desc_parts = []
@@ -226,12 +225,10 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         desc = " ".join(desc_parts) if desc_parts else ""
         pending_type = data.get("pending", {}).get("type") if data.get("pending") else None
 
-        # Определяем тип если не задан — по ключевым словам
         if pending_type is None:
             income_words = ["зарплата", "доход", "получил", "оплата", "клиент", "фриланс", "заработал", "перевод"]
             pending_type = "income" if any(w in desc.lower() for w in income_words) else "expense"
 
-        # Показываем кнопки категорий
         cats = CATS_INCOME if pending_type == "income" else CATS_EXPENSE
         data["pending"] = {"type": pending_type, "amount": amount, "desc": desc}
         save_data(user_id, data)
@@ -252,14 +249,12 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Если ничего не поняли
     await update.message.reply_text(
-        "Не понял 🤔\n\nПопробуй так:\n`350 кофе` — расход\n`80000 зарплата` — доход\n\nИли используй кнопки ниже 👇",
+        "Не понял 🤔\n\nПопробуй так:\n`350 кофе` — расход\n`80000 зарплата` — доход\n\nИли используй кнопки 👇",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
 
-# ─── ВЫБОР КАТЕГОРИИ ──────────────────────────────────────────
 async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -291,7 +286,6 @@ async def handle_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         cat_label = cats.get(cat_id, cat_id)
         sign = "+" if tx["type"] == "income" else "−"
 
-        # Считаем новый баланс месяца
         month_txs = get_month_txs(data["transactions"])
         t = totals(month_txs)
         pct = round(t["income"] / GOAL * 100)
