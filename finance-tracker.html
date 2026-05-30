@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Финансовый трекер</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #f0f0f0; min-height: 100vh; }
+  .app { max-width: 420px; margin: 0 auto; padding: 0 0 80px; }
+
+  /* TABS */
+  .tabs { display: flex; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; position: sticky; top: 0; z-index: 10; }
+  .tab { flex: 1; padding: 14px 0; font-size: 13px; font-weight: 500; text-align: center; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab.active { color: #f0f0f0; border-bottom: 2px solid #4ade80; }
+  .screen { display: none; padding: 1rem; }
+  .screen.active { display: block; }
+
+  /* CARDS */
+  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card-sm { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; }
+
+  /* BALANCE */
+  .bal-label { font-size: 12px; color: #666; margin-bottom: 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .bal-amount { font-size: 32px; font-weight: 600; letter-spacing: -0.5px; }
+  .bal-row { display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #2a2a2a; }
+  .bal-col { flex: 1; }
+  .bal-sub-label { font-size: 11px; color: #555; margin-bottom: 3px; }
+  .bal-sub-val { font-size: 16px; font-weight: 600; }
+  .inc { color: #4ade80; }
+  .exp { color: #f87171; }
+
+  /* GOAL */
+  .goal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .goal-title { font-size: 13px; color: #888; }
+  .goal-pct { font-size: 13px; font-weight: 600; color: #4ade80; }
+  .prog-bar { height: 6px; background: #2a2a2a; border-radius: 99px; overflow: hidden; }
+  .prog-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #4ade80); border-radius: 99px; transition: width 0.5s ease; }
+  .goal-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #555; }
+
+  /* ADD FORM */
+  .form-label { font-size: 12px; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  input[type=number], input[type=text] {
+    flex: 1; font-size: 15px; padding: 10px 12px;
+    border: 1px solid #2a2a2a; border-radius: 10px;
+    background: #111; color: #f0f0f0; outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: #444; }
+  input::placeholder { color: #444; }
+  .toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tbtn { flex: 1; padding: 9px; font-size: 13px; font-weight: 500; border: 1px solid #2a2a2a; border-radius: 10px; cursor: pointer; background: #111; color: #666; transition: all 0.15s; }
+  .tbtn.exp.active { background: #2d1515; color: #f87171; border-color: #7f1d1d; }
+  .tbtn.inc.active { background: #0d2d1a; color: #4ade80; border-color: #14532d; }
+  .cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+  .cbt { padding: 7px 4px; font-size: 11px; text-align: center; border: 1px solid #2a2a2a; border-radius: 8px; cursor: pointer; background: #111; color: #666; line-height: 1.4; transition: all 0.15s; }
+  .cbt.sel { background: #1e1e1e; border-color: #4ade80; color: #f0f0f0; font-weight: 500; }
+  .add-btn { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; background: #4ade80; color: #0a0a0a; transition: all 0.15s; }
+  .add-btn:active { transform: scale(0.97); background: #22c55e; }
+
+  /* TRANSACTIONS */
+  .sec-title { font-size: 12px; color: #555; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tx { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #1e1e1e; }
+  .tx:last-child { border-bottom: none; }
+  .tx-ico { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .tx-info { flex: 1; }
+  .tx-name { font-size: 14px; font-weight: 500; color: #f0f0f0; }
+  .tx-sub { font-size: 12px; color: #555; margin-top: 2px; }
+  .tx-amt { font-size: 15px; font-weight: 600; }
+
+  /* STATS */
+  .stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+  .stat { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; }
+  .stat-lbl { font-size: 11px; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-val { font-size: 20px; font-weight: 600; }
+  .stat-hint { font-size: 11px; color: #555; margin-top: 4px; }
+  .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .cat-nm { font-size: 13px; color: #bbb; width: 90px; flex-shrink: 0; }
+  .bar-wrap { flex: 1; height: 5px; background: #2a2a2a; border-radius: 99px; overflow: hidden; }
+  .bar-in { height: 100%; border-radius: 99px; }
+  .cat-val { font-size: 13px; font-weight: 500; width: 78px; text-align: right; flex-shrink: 0; color: #ddd; }
+  .week-wrap { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+  .bar-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bar-col { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; }
+  .bar-dlbl { font-size: 10px; color: #555; }
+
+  /* HISTORY */
+  .chips { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .chip { padding: 6px 14px; font-size: 12px; border: 1px solid #2a2a2a; border-radius: 99px; cursor: pointer; background: #111; color: #666; transition: all 0.15s; }
+  .chip.active { background: #1e1e1e; border-color: #4ade80; color: #f0f0f0; font-weight: 500; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: #4ade80; color: #0a0a0a; padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 600; opacity: 0; transition: all 0.25s; pointer-events: none; white-space: nowrap; z-index: 100; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  .empty { color: #444; font-size: 14px; padding: 2rem 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="tabs">
+    <div class="tab active" onclick="goTab('home',this)">Главная</div>
+    <div class="tab" onclick="goTab('stats',this)">Статистика</div>
+    <div class="tab" onclick="goTab('hist',this)">История</div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen active" id="sc-home">
+    <div class="card">
+      <div class="bal-label">Баланс за май 2026</div>
+      <div class="bal-amount" id="h-bal">+47 500 ₽</div>
+      <div class="bal-row">
+        <div class="bal-col"><div class="bal-sub-label">Доходы</div><div class="bal-sub-val inc" id="h-inc">135 000 ₽</div></div>
+        <div class="bal-col"><div class="bal-sub-label">Расходы</div><div class="bal-sub-val exp" id="h-exp">87 500 ₽</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="goal-head">
+        <span class="goal-title">Цель: 400 000 ₽/мес</span>
+        <span class="goal-pct" id="h-pct">34%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" id="h-bar" style="width:34%"></div></div>
+      <div class="goal-foot">
+        <span id="h-got">135 000 ₽ получено</span>
+        <span id="h-left">осталось 265 000 ₽</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="form-label">Добавить операцию</div>
+      <div class="input-row">
+        <input type="number" id="inp-amt" placeholder="Сумма ₽"/>
+        <input type="text" id="inp-desc" placeholder="Описание" style="flex:1.5"/>
+      </div>
+      <div class="toggle">
+        <button class="tbtn exp active" id="btn-exp" onclick="setType('expense')">— Расход</button>
+        <button class="tbtn inc" id="btn-inc" onclick="setType('income')">+ Доход</button>
+      </div>
+      <div class="cats" id="cat-grid"></div>
+      <button class="add-btn" onclick="addTx()">Добавить ↵</button>
+    </div>
+
+    <div class="sec-title">Последние операции</div>
+    <div id="h-recent"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="screen" id="sc-stats">
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-lbl">Доходы</div><div class="stat-val inc" id="s-inc">0 ₽</div><div class="stat-hint">цель: 400 000 ₽</div></div>
+      <div class="stat"><div class="stat-lbl">Расходы</div><div class="stat-val exp" id="s-exp">0 ₽</div><div class="stat-hint" id="s-exph">—</div></div>
+      <div class="stat"><div class="stat-lbl">Сэкономлено</div><div class="stat-val" id="s-sav">0 ₽</div><div class="stat-hint">за месяц</div></div>
+      <div class="stat"><div class="stat-lbl">К цели</div><div class="stat-val inc" id="s-gp">0%</div><div class="stat-hint" id="s-gph">нужно 400 000 ₽</div></div>
+    </div>
+    <div class="sec-title">Расходы по категориям</div>
+    <div id="s-cats"></div>
+    <div class="sec-title" style="margin-top:1.25rem">Расходы по дням</div>
+    <div class="week-wrap"><div class="bars" id="s-bars"></div></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="screen" id="sc-hist">
+    <div class="chips" id="chips">
+      <div class="chip active" onclick="filt('all',this)">Все</div>
+      <div class="chip" onclick="filt('income',this)">Доходы</div>
+      <div class="chip" onclick="filt('expense',this)">Расходы</div>
+      <div class="chip" onclick="filt('food',this)">Еда</div>
+      <div class="chip" onclick="filt('transport',this)">Транспорт</div>
+      <div class="chip" onclick="filt('work',this)">Работа</div>
+    </div>
+    <div id="h-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CE=[{id:'food',l:'🍔 Еда',c:'#f59e0b'},{id:'transport',l:'🚗 Транспорт',c:'#3b82f6'},{id:'sport',l:'💪 Спорт',c:'#22c55e'},{id:'fun',l:'🎮 Развлечения',c:'#a855f7'},{id:'health',l:'💊 Здоровье',c:'#ef4444'},{id:'shopping',l:'🛍 Покупки',c:'#ec4899'},{id:'home',l:'🏠 Жильё',c:'#6b7280'},{id:'other',l:'📦 Прочее',c:'#4b5563'}];
+const CI=[{id:'work',l:'💼 Работа',c:'#22c55e'},{id:'freelance',l:'🎨 Фриланс',c:'#a855f7'},{id:'client',l:'🤝 Клиент',c:'#3b82f6'},{id:'other',l:'📦 Прочее',c:'#4b5563'}];
+let type='expense',cat='food';
+let txs=[
+  {id:1,type:'income',cat:'work',desc:'Зарплата проект 1',amt:60000,date:'2026-05-28'},
+  {id:2,type:'income',cat:'freelance',desc:'Клиент Motion',amt:45000,date:'2026-05-26'},
+  {id:3,type:'income',cat:'client',desc:'Клиент AI-видео',amt:30000,date:'2026-05-24'},
+  {id:4,type:'expense',cat:'food',desc:'Продукты',amt:8500,date:'2026-05-29'},
+  {id:5,type:'expense',cat:'transport',desc:'Такси',amt:2200,date:'2026-05-28'},
+  {id:6,type:'expense',cat:'sport',desc:'Абонемент зал',amt:4500,date:'2026-05-27'},
+  {id:7,type:'expense',cat:'fun',desc:'Кино + кафе',amt:3800,date:'2026-05-25'},
+  {id:8,type:'expense',cat:'shopping',desc:'Одежда',amt:12000,date:'2026-05-23'},
+  {id:9,type:'expense',cat:'home',desc:'Аренда',amt:35000,date:'2026-05-22'},
+  {id:10,type:'expense',cat:'food',desc:'Рестораны',amt:6800,date:'2026-05-21'},
+  {id:11,type:'expense',cat:'health',desc:'Врач',amt:3500,date:'2026-05-20'},
+  {id:12,type:'expense',cat:'other',desc:'Подписки',amt:4200,date:'2026-05-19'}
+];
+function gc(id){return[...CE,...CI].find(c=>c.id===id)||{l:id,c:'#888'}}
+function fmt(n){return n.toLocaleString('ru-RU')+' ₽'}
+function totals(){
+  const inc=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amt,0);
+  const exp=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amt,0);
+  return{inc,exp,bal:inc-exp};
+}
+function txHtml(t){
+  const c=gc(t.cat);const sign=t.type==='income'?'+':'−';const col=t.type==='income'?'#4ade80':'#f87171';
+  return`<div class="tx"><div class="tx-ico" style="background:${c.c}22">${c.l.split(' ')[0]}</div><div class="tx-info"><div class="tx-name">${t.desc}</div><div class="tx-sub">${c.l.split(' ').slice(1).join(' ')} · ${t.date.slice(5).replace('-','.')}</div></div><div class="tx-amt" style="color:${col}">${sign}${fmt(t.amt)}</div></div>`;
+}
+function renderHome(){
+  const{inc,exp,bal}=totals();const pct=Math.min(Math.round(inc/400000*100),100);
+  document.getElementById('h-bal').textContent=(bal>=0?'+':'')+fmt(bal);
+  document.getElementById('h-bal').style.color=bal>=0?'#4ade80':'#f87171';
+  document.getElementById('h-inc').textContent=fmt(inc);
+  document.getElementById('h-exp').textContent=fmt(exp);
+  document.getElementById('h-pct').textContent=pct+'%';
+  document.getElementById('h-bar').style.width=pct+'%';
+  document.getElementById('h-got').textContent=fmt(inc)+' получено';
+  document.getElementById('h-left').textContent='осталось '+fmt(Math.max(0,400000-inc));
+  document.getElementById('h-recent').innerHTML=[...txs].sort((a,b)=>b.id-a.id).slice(0,6).map(txHtml).join('');
+}
+function renderStats(){
+  const{inc,exp,bal}=totals();const pct=Math.round(inc/400000*100);
+  document.getElementById('s-inc').textContent=fmt(inc);
+  document.getElementById('s-exp').textContent=fmt(exp);
+  document.getElementById('s-exph').textContent=inc?Math.round(exp/inc*100)+'% от дохода':'—';
+  document.getElementById('s-sav').textContent=fmt(bal);
+  document.getElementById('s-gp').textContent=pct+'%';
+  document.getElementById('s-gph').textContent='нужно '+fmt(Math.max(0,400000-inc));
+  const byCat={};txs.filter(t=>t.type==='expense').forEach(t=>{byCat[t.cat]=(byCat[t.cat]||0)+t.amt});
+  const sorted=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const mx=sorted[0]?.[1]||1;
+  document.getElementById('s-cats').innerHTML=sorted.map(([id,val])=>{const c=gc(id);return`<div class="cat-row"><div class="cat-nm">${c.l.split(' ').slice(1).join(' ')}</div><div class="bar-wrap"><div class="bar-in" style="width:${Math.round(val/mx*100)}%;background:${c.c}"></div></div><div class="cat-val">${fmt(val)}</div></div>`;}).join('');
+  const days=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'],vals=[3200,8500,2200,5400,4800,12000,3800],mxd=Math.max(...vals);
+  document.getElementById('s-bars').innerHTML=days.map((d,i)=>`<div class="bar-day"><div class="bar-col" style="height:${Math.round(vals[i]/mxd*68)}px;background:#22c55e66"></div><div class="bar-dlbl">${d}</div></div>`).join('');
+}
+function renderHist(f='all'){
+  let list=[...txs].sort((a,b)=>b.id-a.id);
+  if(f==='income'||f==='expense')list=list.filter(t=>t.type===f);
+  else if(f!=='all')list=list.filter(t=>t.cat===f);
+  document.getElementById('h-list').innerHTML=list.length?list.map(txHtml).join(''):'<div class="empty">Нет операций</div>';
+}
+function renderCats(){
+  const cats=type==='expense'?CE:CI;
+  if(!cats.find(c=>c.id===cat))cat=cats[0].id;
+  document.getElementById('cat-grid').innerHTML=cats.map(c=>`<div class="cbt${cat===c.id?' sel':''}" onclick="selCat('${c.id}')">${c.l}</div>`).join('');
+}
+function selCat(id){cat=id;renderCats()}
+function setType(t){
+  type=t;
+  document.getElementById('btn-exp').className='tbtn exp'+(t==='expense'?' active':'');
+  document.getElementById('btn-inc').className='tbtn inc'+(t==='income'?' active':'');
+  renderCats();
+}
+function addTx(){
+  const amt=parseFloat(document.getElementById('inp-amt').value);
+  const desc=document.getElementById('inp-desc').value.trim();
+  if(!amt||amt<=0){showToast('Введи сумму');return}
+  txs.unshift({id:Date.now(),type,cat,desc:desc||gc(cat).l.split(' ').slice(1).join(' '),amt,date:new Date().toISOString().slice(0,10)});
+  document.getElementById('inp-amt').value='';
+  document.getElementById('inp-desc').value='';
+  renderHome();showToast((type==='income'?'+':'−')+fmt(amt)+' добавлено');
+}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+function goTab(id,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sc-'+id).classList.add('active');
+  if(id==='stats')renderStats();if(id==='hist')renderHist();
+}
+function filt(f,el){document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderHist(f)}
+renderCats();renderHome();
+</script>
+</body>
+</html>
